@@ -1,38 +1,38 @@
-# Use official PHP image with Composer
-FROM php:8.0-fpm
+# Use official PHP image with Apache and PHP 8.2
+FROM php:8.2-apache
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    libpng-dev \
+    libzip-dev zip unzip \
+    libicu-dev \
     libonig-dev \
     libxml2-dev \
-    zip \
-    unzip \
-    npm \
-    && docker-php-ext-install pdo mbstring exif pcntl bcmath gd
+    curl \
+    git \
+    nano \
+    && docker-php-ext-install pdo pdo_mysql zip intl opcache
+
+# Enable Apache mod_rewrite for Laravel
+RUN a2enmod rewrite
+
+# Set working directory to /var/www/html
+WORKDIR /var/www/html
+
+# Copy the Laravel application to the container
+COPY . .
 
 # Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
-# Set working directory
-WORKDIR /var/www
-
-# Copy the application files
-COPY . /var/www
-
-# Install PHP dependencies
+# Install Laravel dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Install Node.js dependencies and build assets
-RUN npm install && npm run production
+# Set proper permissions for Laravel storage and cache
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www
+# Expose port 80 for the web server
+EXPOSE 80
 
-# Expose the port Laravel will run on
-EXPOSE 8000
-
-# Start Laravel server
-CMD php artisan serve --host=0.0.0.0 --port=8000
+# Start Apache in the foreground
+CMD ["apache2-foreground"]
